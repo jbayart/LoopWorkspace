@@ -1,0 +1,50 @@
+name: Validate Loop with DanaKit fix
+on:
+  push:
+    branches: ["validation/danakit-connection-fix"]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+      - name: Verify source revisions
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C DanaKit rev-parse HEAD)" = "06151aebf0956f74f6ea6ce41637d5a8e5c36cd2"
+          test "$(git -C Loop rev-parse HEAD)" = "c30b5c89b1dc4151628f33f1384dd4796eaeeec2"
+          test "$(git -C LoopKit rev-parse HEAD)" = "d9f1437353482690426bd981536f58c1e95ff535"
+          git submodule status --recursive | tee source-revisions.txt
+          {
+            echo "LoopWorkspace: $(git rev-parse HEAD)"
+            echo "DanaKit: $(git -C DanaKit rev-parse HEAD)"
+            echo "Full Loop Release build; code signing disabled."
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Select Xcode
+        run: |
+          sudo xcode-select --switch /Applications/Xcode_26.3.app/Contents/Developer
+          xcodebuild -version
+      - name: Build Loop for iOS
+        shell: bash
+        run: |
+          set -o pipefail
+          xcodebuild build -workspace LoopWorkspace.xcworkspace -scheme LoopWorkspace \
+            -configuration Release -destination 'generic/platform=iOS' \
+            -derivedDataPath DerivedData -resultBundlePath LoopBuild.xcresult \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+            | tee loop-build.log
+      - name: Upload build diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: loop-danakit-build-diagnostics
+          path: |
+            loop-build.log
+            source-revisions.txt
+            LoopBuild.xcresult

@@ -1,0 +1,81 @@
+name: Deploy validated DanaKit connection fix to TestFlight
+run-name: TestFlight - DanaKit connection fix 06151ae
+on:
+  push:
+    branches: ["deploy/danakit-connection-fix"]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: loop-testflight
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: macos-15
+    timeout-minutes: 90
+    steps:
+      - name: Checkout the validated source revision
+        uses: actions/checkout@v5
+        with:
+          ref: f161e91790504f1b89b985298a1523126a8cf162
+          submodules: recursive
+          persist-credentials: false
+      - name: Verify source revisions
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "f161e91790504f1b89b985298a1523126a8cf162"
+          test "$(git -C DanaKit rev-parse HEAD)" = "06151aebf0956f74f6ea6ce41637d5a8e5c36cd2"
+          test "$(git -C Loop rev-parse HEAD)" = "c30b5c89b1dc4151628f33f1384dd4796eaeeec2"
+          test "$(git -C LoopKit rev-parse HEAD)" = "d9f1437353482690426bd981536f58c1e95ff535"
+          git submodule status --recursive | tee source-revisions.txt
+          {
+            echo "LoopWorkspace source: f161e91790504f1b89b985298a1523126a8cf162"
+            echo "DanaKit: 06151aebf0956f74f6ea6ce41637d5a8e5c36cd2"
+            echo "Only the interactive Bluetooth connection fix is included."
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Select validated Xcode version
+        run: |
+          sudo xcode-select --switch /Applications/Xcode_26.3.app/Contents/Developer
+          xcodebuild -version
+      - name: Install Ruby and project dependencies
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+          bundler-cache: true
+      - name: Patch Match tables as in the existing build workflow
+        shell: bash
+        run: |
+          TABLE_PRINTER_PATH=$(bundle exec ruby -e 'puts Gem::Specification.find_by_name("fastlane").gem_dir')/match/lib/match/table_printer.rb
+          test -f "$TABLE_PRINTER_PATH"
+          sed -i "" "/puts(Terminal::Table.new(params))/d" "$TABLE_PRINTER_PATH"
+      - name: Sync clock
+        run: sudo sntp -sS time.windows.com
+      - name: Fastlane Build and Archive
+        run: bundle exec fastlane build_loop
+        env:
+          TEAMID: ${{ secrets.TEAMID }}
+          GH_PAT: ${{ secrets.GH_PAT }}
+          FASTLANE_KEY_ID: ${{ secrets.FASTLANE_KEY_ID }}
+          FASTLANE_ISSUER_ID: ${{ secrets.FASTLANE_ISSUER_ID }}
+          FASTLANE_KEY: ${{ secrets.FASTLANE_KEY }}
+          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+      - name: Fastlane upload to TestFlight
+        run: bundle exec fastlane release
+        env:
+          TEAMID: ${{ secrets.TEAMID }}
+          GH_PAT: ${{ secrets.GH_PAT }}
+          FASTLANE_KEY_ID: ${{ secrets.FASTLANE_KEY_ID }}
+          FASTLANE_ISSUER_ID: ${{ secrets.FASTLANE_ISSUER_ID }}
+          FASTLANE_KEY: ${{ secrets.FASTLANE_KEY }}
+          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+      - name: Upload build logs and symbols
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: testflight-danakit-connection-fix
+          path: |
+            artifacts
+            buildlog
+            source-revisions.txt
+            *.dSYM.zip

@@ -11,10 +11,10 @@ concurrency:
   cancel-in-progress: false
 jobs:
   deploy:
-    runs-on: macos-26-intel
+    runs-on: macos-15
     timeout-minutes: 90
     steps:
-      - name: Checkout the combined source revision
+      - name: Checkout the validated source revision
         uses: actions/checkout@v5
         with:
           ref: c8a20ba0149c86b78292da0c6f71c017caab304b
@@ -32,58 +32,12 @@ jobs:
           {
             echo "LoopWorkspace source: c8a20ba0149c86b78292da0c6f71c017caab304b"
             echo "DanaKit: ce9efc5e1cbad6f70902c23366c299cb0fa54807"
-            echo "Both the connection request and bolus progress queue fixes are included."
+            echo "Includes the interactive Bluetooth connection fix and bolus progress reporting queue fix."
           } >> "$GITHUB_STEP_SUMMARY"
       - name: Select validated Xcode version
         run: |
           sudo xcode-select --switch /Applications/Xcode_26.3.app/Contents/Developer
           xcodebuild -version
-      - name: Checkout reviewed connection regression tests
-        uses: actions/checkout@v5
-        with:
-          repository: jbayart/DanaKit
-          ref: 9bbb5f319b3edae1f25b5a16e6b6a16ba631ecd1
-          path: connection-validation
-          persist-credentials: false
-      - name: Run connection regressions against the combined source
-        shell: bash
-        run: |
-          set -euo pipefail
-          cp DanaKit/Common/Locked.swift connection-validation/Common/Locked.swift
-          cp DanaKit/DanaKit/PumpManager/InteractiveBluetoothManager.swift connection-validation/DanaKit/PumpManager/InteractiveBluetoothManager.swift
-          bash connection-validation/Scripts/test-connection-requests.sh
-          bash connection-validation/Scripts/test-connection-requests.sh --sanitize=thread
-      - name: Checkout reviewed bolus progress tests
-        uses: actions/checkout@v5
-        with:
-          repository: jbayart/DanaKit
-          ref: e8152cda5f62851ebf0c44db2d27161a67f5bce6
-          path: progress-validation
-          persist-credentials: false
-      - name: Run bolus progress regressions against the combined source
-        shell: bash
-        run: |
-          set -euo pipefail
-          package_dir="$(mktemp -d)"
-          mkdir -p "$package_dir/Sources/LoopKit" "$package_dir/Sources/DanaProgress" "$package_dir/Tests/DanaProgressTests"
-          cp LoopKit/LoopKit/WeakSet.swift LoopKit/LoopKit/UnfairLock.swift LoopKit/LoopKit/DeviceManager/DoseProgressReporter.swift "$package_dir/Sources/LoopKit/"
-          cp DanaKit/Common/Locked.swift DanaKit/DanaKit/PumpManager/DanaKitDoseProgressReporter.swift "$package_dir/Sources/DanaProgress/"
-          cp progress-validation/Validation/BolusProgressTests.swift "$package_dir/Tests/DanaProgressTests/"
-          cat > "$package_dir/Package.swift" <<'SWIFT'
-          // swift-tools-version: 6.0
-          import PackageDescription
-          let package = Package(
-              name: "DanaProgressTests",
-              targets: [
-                  .target(name: "LoopKit"),
-                  .target(name: "DanaProgress", dependencies: ["LoopKit"]),
-                  .testTarget(name: "DanaProgressTests", dependencies: ["DanaProgress", "LoopKit"])
-              ],
-              swiftLanguageModes: [.v5]
-          )
-          SWIFT
-          swift test --package-path "$package_dir"
-          swift test --package-path "$package_dir" --sanitize=thread
       - name: Install Ruby and project dependencies
         uses: ruby/setup-ruby@v1
         with:

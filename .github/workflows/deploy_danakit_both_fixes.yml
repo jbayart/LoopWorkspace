@@ -1,5 +1,5 @@
 name: Deploy both DanaKit fixes to TestFlight
-run-name: TestFlight - both DanaKit fixes
+run-name: TestFlight - Bluetooth fix and independent dose progress reporters
 on:
   push:
     branches: ["deploy/danakit-both-fixes"]
@@ -17,21 +17,21 @@ jobs:
       - name: Checkout the validated source revision
         uses: actions/checkout@v5
         with:
-          ref: c8a20ba0149c86b78292da0c6f71c017caab304b
+          ref: 599121630276dd712ed34cbbf8aded0b7cd32bbc
           submodules: recursive
           persist-credentials: false
       - name: Verify source revisions
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD)" = "c8a20ba0149c86b78292da0c6f71c017caab304b"
-          test "$(git -C DanaKit rev-parse HEAD)" = "ce9efc5e1cbad6f70902c23366c299cb0fa54807"
+          test "$(git rev-parse HEAD)" = "599121630276dd712ed34cbbf8aded0b7cd32bbc"
+          test "$(git -C DanaKit rev-parse HEAD)" = "77c15673ff46eaeedd5e1bfd52f5b7a89052c915"
           test "$(git -C Loop rev-parse HEAD)" = "c30b5c89b1dc4151628f33f1384dd4796eaeeec2"
           test "$(git -C LoopKit rev-parse HEAD)" = "d9f1437353482690426bd981536f58c1e95ff535"
           git submodule status --recursive | tee source-revisions.txt
           {
-            echo "LoopWorkspace source: c8a20ba0149c86b78292da0c6f71c017caab304b"
-            echo "DanaKit: ce9efc5e1cbad6f70902c23366c299cb0fa54807"
+            echo "LoopWorkspace source: 599121630276dd712ed34cbbf8aded0b7cd32bbc"
+            echo "DanaKit: 77c15673ff46eaeedd5e1bfd52f5b7a89052c915"
             echo "Includes the interactive Bluetooth connection fix and bolus progress reporting queue fix."
           } >> "$GITHUB_STEP_SUMMARY"
       - name: Select validated Xcode version
